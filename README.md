@@ -20,8 +20,9 @@ AWS S3 credentials are read from the following environment variables:
 * AWS\_ACCESS\_KEY\_ID
 
 Once these are set with valid values:
-```./etcd2s3```
-
+```bash
+./etcd2s3
+```
 
 # Roadmap
 * use godeps
