@@ -5,7 +5,9 @@ A simple tool to backup an etcd2 cluster into an AWS S3 bucket.
 # Usage
 
 ##Get the code:
-```go get https://github.com/revinate/etc2s3```
+```
+go get https://github.com/revinate/etc2s3
+```
 
 ##Compile it:
 ```
