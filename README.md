@@ -27,8 +27,6 @@ Once these are set with valid values:
 ```
 
 # Roadmap
-* make bucket an argument
-* make etcd2 data dir an argument
 * remove dependency on "tar"
 * remove dependency on "etcdctl"
 * remove dependence on disk for backup ("etcdctl backup" and "tar" save output to disk...can we stream directly?)
