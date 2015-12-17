@@ -27,7 +27,6 @@ Once these are set with valid values:
 ```
 
 # Roadmap
-* use godeps
 * make bucket an argument
 * make etcd2 data dir an argument
 * remove dependency on "tar"
