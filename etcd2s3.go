@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,23 +18,32 @@ import (
 	"github.com/revinate/etcd2s3/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws"
 	"github.com/revinate/etcd2s3/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws/session"
 	"github.com/revinate/etcd2s3/Godeps/_workspace/src/github.com/aws/aws-sdk-go/service/s3"
+	"github.com/revinate/etcd2s3/Godeps/_workspace/src/github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 var bucketEnvVar = "ETCD2S3_BUCKET_NAME"
 var etcd2DataDirEnvVar = "ETCD2S3_DATA_DIR"
+var repeatEnvVar = "ETCD2S3_REPEAT_INTERVAL"
 
 func main() {
 	// help users
-	validate()
+	err := validate()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// first run
-	backupAndShip()
+	// ignore failures
+	err = backupAndShip()
+	if err != nil {
+		log.Print(err)
+	}
 
 	// repeat, if necessary
 	repeat()
 }
 
-func validate() {
+func validate() error {
 	// TODO: input validation
 	// TODO: validate datadir is an actual directory
 	// complain if required environment variables are absent
@@ -52,16 +62,19 @@ func validate() {
 	// tell the user and quit if we're missing anything
 	if len(missing) > 0 {
 		msg := "Missing " + strings.Join(missing, ", ") + " environment variable(s)."
-		log.Fatal(msg)
+		return errors.New(msg)
 	}
+
+	return nil
 }
 
-func repeat() {
-	repeatInterval := os.Getenv("ETCD2S3_REPEAT_INTERVAL")
+func repeat() error {
+	repeatInterval := os.Getenv(repeatEnvVar)
+
 	if repeatInterval != "" {
 		_repeatDuration, err := time.ParseDuration(repeatInterval)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		// set ticker duration
@@ -69,33 +82,37 @@ func repeat() {
 
 		// repeated runs, based on duration of ticker
 		for {
-			log.Printf("Next alarm will be in %s.", _repeatDuration)
+			log.Printf("Next execution will be at %s (%s from now).", time.Now().Add(_repeatDuration).Format(time.RFC3339), _repeatDuration)
 			select {
 			case <-ticker.C:
 				log.Print("Waking up to backup.")
 				go backupAndShip()
 			}
 		}
+	} else {
+		log.Print("EnvVar " + repeatEnvVar + " is missing.  Not repeating.")
 	}
+
+	return nil
 }
 
-func backupAndShip() {
+func backupAndShip() error {
 	// create top level tempdir
 	dirname := time.Now().Format(time.RFC3339)
 	archiveName := dirname + ".tar.bz"
 
 	fulldirpath, err := ioutil.TempDir(os.TempDir(), dirname)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	// cleanup after ourselves
 	defer os.RemoveAll(fulldirpath)
 
 	// create tempdir for backup
 	databackupdir := path.Join(fulldirpath, "data")
-	err = os.Mkdir(databackupdir, 0700) //ioutil.TempDir(fulldirpath, "data")
+	err = os.Mkdir(databackupdir, 0700)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	// execute etcd2 backup
@@ -105,65 +122,12 @@ func backupAndShip() {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(fmt.Sprintf("%s", output))
+		return errors.New(string(output) + err.Error())
 	}
 
-	// compress
-	pathToArchive := path.Join(fulldirpath, archiveName)
-	log.Print("Compressing.")
-	wrapit(databackupdir, pathToArchive)
-
-	// encrypt (TODO)
-
-	// ship to s3
-	bucket := os.Getenv(bucketEnvVar)
-	svc := s3.New(session.New(&aws.Config{Region: aws.String("us-west-2")}))
-
-	// check if bucket exists
-	// TODO: bucket retention policy
-	params := &s3.HeadBucketInput{
-		Bucket: aws.String(bucket),
-	}
-	log.Printf("Verifying bucket \"%s\" exists.\n", bucket)
-	_, err = svc.HeadBucket(params)
-
-	// if bucket doesn't exist, create it
-	if err != nil {
-		log.Print("Bucket missing.  Creating...")
-		//actually create it
-		_, err = svc.CreateBucket(&s3.CreateBucketInput{
-			Bucket: &bucket,
-		})
-		if err != nil {
-			log.Fatal("Failed to create bucket: ", err)
-		}
-
-		if err = svc.WaitUntilBucketExists(&s3.HeadBucketInput{Bucket: &bucket}); err != nil {
-			log.Fatal("Failed to wait for bucket to exist: ", bucket, err)
-		}
-	}
-
-	// get a file handle to the archive
-	f, err := os.Open(pathToArchive)
-	defer f.Close()
-
-	log.Print("Sending backup to S3.")
-	// now, upload the file to the bucket
-	_, err = svc.PutObject(&s3.PutObjectInput{
-		Body:   f,
-		Bucket: &bucket,
-		Key:    &archiveName,
-	})
-	if err != nil {
-		log.Fatal("Failed to upload data to S3: ", bucket, archiveName, err)
-	}
-
-	log.Print("Success.")
-
-}
-
-func wrapit(source, target string) error {
-	pr, pw := io.Pipe()
+	// pipes to make this quick!
+	combineReader, combineWriter := io.Pipe()
+	compressReader, compressWriter := io.Pipe()
 
 	// create channels to synchronize
 	done := make(chan bool)
@@ -171,17 +135,14 @@ func wrapit(source, target string) error {
 	defer close(done)
 	defer close(errs)
 
-	// combine to single stream
-	go tarit(source, pw, errs, done)
+	go tarIt(databackupdir, combineWriter, errs, done)
+	go compressIt(combineReader, compressWriter, errs, done)
+	//TODO: encryptit()
+	go shipIt(compressReader, os.Getenv(bucketEnvVar), archiveName, errs, done)
 
-	// compress stream and save to file
-	// TODO: use xz when golang has native
-	// xz code...currently, only libc bindings
-	go gzipit(pr, target, errs, done)
-
-	// wait until both tarit and gzipit
-	// are done or an error occurs
-	for c := 0; c < 2; {
+	// TODO: refactor this to be more elegant
+	// wait for all to finish
+	for c := 0; c < 3; {
 		select {
 		case err := <-errs:
 			return err
@@ -190,12 +151,35 @@ func wrapit(source, target string) error {
 		}
 	}
 
+	log.Print("Success.")
+
 	return nil
+
 }
 
-// func tarit() is based on this article:
+func shipIt(reader io.Reader, bucket string, key string, errs chan error, done chan bool) {
+	err := ensureBucketExists(bucket)
+	if err != nil {
+		errs <- err
+	}
+
+	uploader := s3manager.NewUploader(session.New(&aws.Config{Region: aws.String("us-west-2")}))
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Body:   reader,
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		errs <- err
+	}
+
+	done <- true
+
+}
+
+// func tarIt() is based on this article:
 // http://blog.ralch.com/tutorial/golang-working-with-tar-and-gzip/
-func tarit(source string, target io.WriteCloser, errs chan error, done chan bool) error {
+func tarIt(source string, target io.WriteCloser, errs chan error, done chan bool) {
 	// must close the target when done
 	defer target.Close()
 
@@ -250,27 +234,52 @@ func tarit(source string, target io.WriteCloser, errs chan error, done chan bool
 
 	done <- true
 
-	return nil
 }
 
 // func gzipit() is based on this article:
 // http://blog.ralch.com/tutorial/golang-working-with-tar-and-gzip/
-func gzipit(reader io.Reader, target string, errs chan error, done chan bool) error {
-	writer, err := os.Create(target)
-	if err != nil {
-		errs <- err
-	}
+func compressIt(reader io.Reader, writer io.WriteCloser, errs chan error, done chan bool) {
 	defer writer.Close()
 
 	archiver := gzip.NewWriter(writer)
 	defer archiver.Close()
 
-	_, err = io.Copy(archiver, reader)
+	_, err := io.Copy(archiver, reader)
 	if err != nil {
 		errs <- err
 	}
 
 	done <- true
 
+}
+
+func ensureBucketExists(bucket string) error { //bucket string) {
+	svc := s3.New(session.New(&aws.Config{Region: aws.String("us-west-2")}))
+
+	// check if bucket exists
+	// TODO: bucket retention policy
+	params := &s3.HeadBucketInput{
+		Bucket: aws.String(bucket),
+	}
+	log.Printf("Verifying bucket \"%s\" exists.\n", bucket)
+	_, err := svc.HeadBucket(params)
+
+	// if bucket doesn't exist, create it
+	if err != nil {
+		log.Print("Bucket missing.  Creating...")
+		//actually create it
+		_, err = svc.CreateBucket(&s3.CreateBucketInput{
+			Bucket: &bucket,
+		})
+		if err != nil {
+			return err
+		}
+
+		if err = svc.WaitUntilBucketExists(&s3.HeadBucketInput{Bucket: &bucket}); err != nil {
+			return err
+		}
+	}
+
 	return nil
+
 }
