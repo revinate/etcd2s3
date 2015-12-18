@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/revinate/etcd2s3",
-	"GoVersion": "go1.5.1",
+	"GoVersion": "go1.5.2",
 	"Deps": [
 		{
 			"ImportPath": "github.com/aws/aws-sdk-go/aws",

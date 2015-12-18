@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/revinate/etcd2s3/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws"
+	"github.com/revinate/etcd2s3/Godeps/_workspace/src/github.com/aws/aws-sdk-go/aws/session"
+	"github.com/revinate/etcd2s3/Godeps/_workspace/src/github.com/aws/aws-sdk-go/service/s3"
 )
 
 var bucketEnvVar = "ETCD2S3_BUCKET_NAME"
