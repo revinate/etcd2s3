@@ -86,7 +86,13 @@ func repeat() error {
 			select {
 			case <-ticker.C:
 				log.Print("Waking up to backup.")
-				go backupAndShip()
+				go func() {
+					err := backupAndShip()
+					// log the error if we get one
+					if err != nil {
+						log.Print(err)
+					}
+				}()
 			}
 		}
 	} else {
