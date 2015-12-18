@@ -23,7 +23,17 @@ var bucketEnvVar = "ETCD2S3_BUCKET_NAME"
 var etcd2DataDirEnvVar = "ETCD2S3_DATA_DIR"
 
 func main() {
+	// help users
+	validate()
 
+	// first run
+	backupAndShip()
+
+	// repeat, if necessary
+	repeat()
+}
+
+func validate() {
 	// TODO: input validation
 	// TODO: validate datadir is an actual directory
 	// complain if required environment variables are absent
@@ -44,7 +54,32 @@ func main() {
 		msg := "Missing " + strings.Join(missing, ", ") + " environment variable(s)."
 		log.Fatal(msg)
 	}
+}
 
+func repeat() {
+	repeatInterval := os.Getenv("ETCD2S3_REPEAT_INTERVAL")
+	if repeatInterval != "" {
+		_repeatDuration, err := time.ParseDuration(repeatInterval)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// set ticker duration
+		ticker := time.NewTicker(_repeatDuration)
+
+		// repeated runs, based on duration of ticker
+		for {
+			log.Printf("Next alarm will be in %s.", _repeatDuration)
+			select {
+			case <-ticker.C:
+				log.Print("Waking up to backup.")
+				go backupAndShip()
+			}
+		}
+	}
+}
+
+func backupAndShip() {
 	// create top level tempdir
 	dirname := time.Now().Format(time.RFC3339)
 	archiveName := dirname + ".tar.bz"
@@ -75,7 +110,7 @@ func main() {
 
 	// compress
 	pathToArchive := path.Join(fulldirpath, archiveName)
-	log.Print("Compressing...")
+	log.Print("Compressing.")
 	wrapit(databackupdir, pathToArchive)
 
 	// encrypt (TODO)
@@ -112,7 +147,7 @@ func main() {
 	f, err := os.Open(pathToArchive)
 	defer f.Close()
 
-	log.Print("Sending backup to S3...")
+	log.Print("Sending backup to S3.")
 	// now, upload the file to the bucket
 	_, err = svc.PutObject(&s3.PutObjectInput{
 		Body:   f,
@@ -124,8 +159,6 @@ func main() {
 	}
 
 	log.Print("Success.")
-
-	//	wrapit("/tmp/foo", "/tmp/foo.tar.bz")
 
 }
 
@@ -146,8 +179,8 @@ func wrapit(source, target string) error {
 	// xz code...currently, only libc bindings
 	go gzipit(pr, target, errs, done)
 
-	// wait until both are done
-	// or an error occurs
+	// wait until both tarit and gzipit
+	// are done or an error occurs
 	for c := 0; c < 2; {
 		select {
 		case err := <-errs:
@@ -171,7 +204,7 @@ func tarit(source string, target io.WriteCloser, errs chan error, done chan bool
 
 	info, err := os.Stat(source)
 	if err != nil {
-		log.Fatal(err) //return nil
+		log.Fatal(err)
 	}
 
 	var baseDir string
@@ -183,11 +216,11 @@ func tarit(source string, target io.WriteCloser, errs chan error, done chan bool
 	filepath.Walk(source,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				errs <- err //log.Fatal(err) //return err
+				errs <- err
 			}
 			header, err := tar.FileInfoHeader(info, info.Name())
 			if err != nil {
-				errs <- err //log.Fatal(err) //return err
+				errs <- err
 			}
 
 			if baseDir != "" {
@@ -195,7 +228,7 @@ func tarit(source string, target io.WriteCloser, errs chan error, done chan bool
 			}
 
 			if err := tarball.WriteHeader(header); err != nil {
-				errs <- err //log.Fatal(err) //return err
+				errs <- err
 			}
 
 			if info.IsDir() {
@@ -204,7 +237,7 @@ func tarit(source string, target io.WriteCloser, errs chan error, done chan bool
 
 			file, err := os.Open(path)
 			if err != nil {
-				errs <- err //log.Fatal(err) //return err
+				errs <- err
 			}
 			defer file.Close()
 			_, err = io.Copy(tarball, file)
@@ -225,7 +258,7 @@ func tarit(source string, target io.WriteCloser, errs chan error, done chan bool
 func gzipit(reader io.Reader, target string, errs chan error, done chan bool) error {
 	writer, err := os.Create(target)
 	if err != nil {
-		errs <- err //log.Fatal(err) //return err
+		errs <- err
 	}
 	defer writer.Close()
 

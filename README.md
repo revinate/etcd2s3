@@ -21,9 +21,13 @@ Required environment variables:
 
 * AWS\_ACCESS\_KEY\_ID
 
-* ETCD2S3_BUCKET_NAME
+* ETCD2S3\_BUCKET\_NAME
 
-* ETCD2S3_DATA_DIR
+* ETCD2S3\_DATA\_DIR
+
+Optional environment variables:
+
+* ETCD2S3\_REPEAT\_INTERVAL - if set using [time.ParseDuration](https://golang.org/pkg/time/#ParseDuration), this will keep the utility running and attempt a backup after each interval.  For example, if set to "5m", the utility will run every 5 minutes.
 
 Once these are set with valid values:
 ```bash
