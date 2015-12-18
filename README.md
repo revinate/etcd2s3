@@ -23,7 +23,7 @@ Required environment variables:
 
 * ETCD2S3\_BUCKET\_NAME
 
-* ETCD2S3\_DATA\_DIR
+* ETCD2S3\_DATA\_DIR - the path to the etcd2 data directory (where the backup utility will start from)
 
 Optional environment variables:
 
