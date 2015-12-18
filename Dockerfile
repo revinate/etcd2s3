@@ -1,3 +1,3 @@
 FROM scratch
-ADD etc2s3 /
-CMD ["/etc2s3"]
+ADD etcd2s3 /
+CMD ["/etcd2s3"]
