@@ -27,7 +27,7 @@ Required environment variables:
 
 Optional environment variables:
 
-* ETCD2S3\_REPEAT\_INTERVAL - if set using [time.ParseDuration](https://golang.org/pkg/time/#ParseDuration), this will keep the utility running and attempt a backup after each interval.  For example, if set to "5m", the utility will run every 5 minutes.
+* ETCD2S3\_REPEAT\_INTERVAL - if set using [time.ParseDuration](https://golang.org/pkg/time/#ParseDuration), this will keep the utility running and attempt a backup after each interval.  For example, if set to "5m", the backup/ship will run every 5 minutes.
 
 Once these are set with valid values:
 ```bash
