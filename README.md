@@ -15,11 +15,15 @@ cd $GOPATH/src/github.com/revinate/etcd2s3; go build
 ```
 
 ##Run it:
-AWS S3 credentials are read from the following environment variables:
+Required environment variables:
 
 * AWS\_SECRET\_ACCESS\_KEY
 
 * AWS\_ACCESS\_KEY\_ID
+
+* ETCD2S3_BUCKET_NAME
+
+* ETCD2S3_DATA_DIR
 
 Once these are set with valid values:
 ```bash
@@ -27,8 +31,7 @@ Once these are set with valid values:
 ```
 
 # Roadmap
-* remove dependency on "tar"
 * remove dependency on "etcdctl"
-* remove dependence on disk for backup ("etcdctl backup" and "tar" save output to disk...can we stream directly?)
+* remove dependence on disk for backup ("etcdctl backup"...can we stream directly to tar/zipper?)
 * use spf13/cobra or some other CLI building tool
 * tests!
