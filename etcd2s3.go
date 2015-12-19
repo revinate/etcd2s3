@@ -104,10 +104,10 @@ func repeat() error {
 
 func backupAndShip() error {
 	// create top level tempdir
-	dirname := time.Now().Format(time.RFC3339)
-	archiveName := dirname + ".tar.bz"
+	startTime := time.Now()
+	archiveName := startTime.Format(time.RFC3339) + ".tar.bz"
 
-	fulldirpath, err := ioutil.TempDir(os.TempDir(), dirname)
+	fulldirpath, err := ioutil.TempDir(os.TempDir(), "etcd2s3")
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,8 @@ func backupAndShip() error {
 		}
 	}
 
-	log.Print("Success.")
+	diffTime := time.Since(startTime)
+	log.Print("Success in ", diffTime)
 
 	return nil
 
