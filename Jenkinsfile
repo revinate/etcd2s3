@@ -1,6 +1,6 @@
 def app = 'etcd2s3'
 def registry = 'registry.revinate.net/techops'
-def gopath = '/go/src/github.com/revinate/${app}'
+def gopath = "/go/src/github.com/revinate/${app}"
 def name = "${registry}/${app}"
 
 stage 'Golang build'
