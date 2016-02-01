@@ -9,7 +9,7 @@ node {
 
   sh "docker run --rm -v `pwd`:${gopath} -w ${gopath} golang:1.5 make"
 
-  stash name: 'binary', includes: 'webby'
+  stash name: 'binary', includes: "${app}"
 }
 
 stage 'Docker build and push'
