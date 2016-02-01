@@ -1,12 +1,12 @@
 def registry = 'registry.revinate.net/techops'
-def image = 'etcd2s3'
+def gopath = '/go/src/github.com/revinate/etcd2s3'
 def name = "${registry}/${image}"
 
 stage 'Golang build'
 node {
   checkout scm
 
-  sh "docker run --rm -v `pwd`:/usr/src/${image} -w /usr/src/${image} golang:1.5 make ${image}"
+  sh "docker run --rm -v `pwd`:${gopath} -w ${gopath} golang:1.5 make"
 
   stash name: 'binary', includes: 'webby'
 }
