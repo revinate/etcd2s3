@@ -28,4 +28,6 @@ node {
   sh "docker tag -f ${name} ${tag}"
   sh "docker push ${tag}"
   sh "docker push ${name}"
+
+  sh "curl -s -XPOST http://stagehand-techops-prod.revinate.net/build/${app} -d 'version=${version}'"
 }
