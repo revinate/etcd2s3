@@ -4,16 +4,16 @@ def gopath = "/go/src/github.com/revinate/${app}"
 def name = "${registry}/${app}"
 
 stage 'Golang build'
-node {
+node('jenkins-in-docker') {
   checkout scm
 
-  sh "docker run --rm -v `pwd`:${gopath} -w ${gopath} golang:1.7 make"
+  sh "docker run --rm -v `pwd`:${gopath} -w ${gopath} golang:1.8 make"
 
   stash name: 'binary', includes: "${app}"
 }
 
 stage 'Docker build and push'
-node {
+node('jenkins-in-docker') {
   checkout scm
   unstash 'binary'
 
